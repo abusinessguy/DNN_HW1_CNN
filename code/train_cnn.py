@@ -12,6 +12,11 @@ import glob
 import torch.nn.functional as F
 import csv
 
+# Adjustable parameters
+batch_size = 64
+learning_rate = 0.001
+dropout_rate = 0.4
+
 # Step 1: Dataset and DataLoader setup
 class ImagenetteDataset(Dataset):
     def __init__(self, labels, image_paths, transform=None):
@@ -42,15 +47,15 @@ class ImagenetteDataset(Dataset):
 # Load CSV
 # data_df = pd.read_csv('imagenette2-160/noisy_imagenette.csv') #run locally
 data_df = pd.read_csv('/content/DNN_HW1_CNN/imagenette2-160/noisy_imagenette.csv')
-# print(data_df.columns)
+
 
 train_df = data_df[data_df['is_valid'] == False]
 val_df = data_df[data_df['is_valid'] == True]
 
 train_transforms = transforms.Compose([
     transforms.Resize((160, 160)),  # Enforce 160x160 for all images
-    # transforms.RandomHorizontalFlip(),
-    # transforms.ColorJitter(),
+    transforms.RandomHorizontalFlip(),
+    transforms.ColorJitter(),
     transforms.ToTensor(),
 ])
 val_transforms = transforms.Compose([
@@ -70,8 +75,8 @@ train_dataset = ImagenetteDataset(train_df['noisy_labels_0'].values, train_paths
 val_dataset = ImagenetteDataset(val_df['noisy_labels_0'].values, val_paths, transform=val_transforms)
 
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 # Step 2: Define the CNN model
 class SimpleCNN(nn.Module):
@@ -80,10 +85,12 @@ class SimpleCNN(nn.Module):
         
         # First convolutional layer with ReLU activation and max pooling
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding=1)
+        #self.bn1 = nn.BatchNorm2d(32)  # Batch normalization for first conv layer
         self.relu1 = nn.ReLU()  # ReLU activation
         
         # Second convolutional layer with ReLU activation and max pooling
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        #self.bn2 = nn.BatchNorm2d(64)  # Batch normalization for second conv layer
         self.relu2 = nn.ReLU()  # ReLU activation
 
         # Pooling layer to reduce dimensions
@@ -91,16 +98,19 @@ class SimpleCNN(nn.Module):
 
         # Fully connected layer and final output layer with Softmax
         self.fc1 = nn.Linear(102400, 128)  # Adjust input size based on pooling output dimensions
+        self.dropout = nn.Dropout(dropout_rate)  # Dropout layer with 50% probability
         self.fc2 = nn.Linear(128, num_classes)  # Output layer for class predictions
 
     def forward(self, x):
         # Pass through first conv layer, apply ReLU, and then max pooling
         x = self.conv1(x)
+        #x = self.bn1(x)  # Apply batch normalization
         x = self.relu1(x)  # Applying ReLU activation
         x = self.pool(x)   # Applying Max Pooling
         
         # Pass through second conv layer, apply ReLU, and then max pooling
         x = self.conv2(x)
+        #x = self.bn2(x)  # Apply batch normalization
         x = self.relu2(x)  # Applying ReLU activation
         x = self.pool(x)   # Applying Max Pooling
 
@@ -110,6 +120,7 @@ class SimpleCNN(nn.Module):
         # Fully connected layers
         x = self.fc1(x)
         x = F.relu(x)  # Another ReLU activation in the fully connected layer
+        x = self.dropout(x)  # Apply dropout regularization
 
         # Output layer with Softmax
         x = self.fc2(x)
@@ -119,9 +130,10 @@ class SimpleCNN(nn.Module):
 
 # Step 3: Training and evaluation setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 model = SimpleCNN(num_classes=10).to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Step 4: Training loop
 num_epochs = 20
@@ -188,6 +200,7 @@ for epoch in range(num_epochs):
         writer = csv.writer(file)
         writer.writerow([epoch + 1, train_losses[-1], train_accuracies[-1], val_losses[-1], val_accuracies[-1]])
 
+    '''
     # Save model checkpoint at each epoch
     checkpoint_path = os.path.join(checkpoint_dir, f'model_epoch_{epoch+1}_valacc_{val_accuracies[-1]:.2f}.pth')
     torch.save({
@@ -200,6 +213,7 @@ for epoch in range(num_epochs):
         'val_acc': val_accuracies[-1]
     }, checkpoint_path)
     print(f"Checkpoint saved at {checkpoint_path}")
+    '''
 
 # Save final model
 final_model_path = 'final_model.pth'
@@ -215,7 +229,6 @@ plt.plot(val_losses, label='Validation Loss')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
-plt.savefig('/content/DNN_HW1_CNN/results.png')
 
 plt.subplot(1, 2, 2)
 plt.plot(train_accuracies, label='Train Accuracy')
@@ -224,4 +237,5 @@ plt.xlabel('Epoch')
 plt.ylabel('Accuracy (%)')
 plt.legend()
 
+plt.savefig('/content/DNN_HW1_CNN/results.png')
 plt.show()
