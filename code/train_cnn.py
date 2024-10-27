@@ -40,7 +40,8 @@ class ImagenetteDataset(Dataset):
 
 
 # Load CSV
-data_df = pd.read_csv('imagenette2-160/noisy_imagenette.csv')
+# data_df = pd.read_csv('imagenette2-160/noisy_imagenette.csv') #run locally
+data_df = pd.read_csv('/content/DNN_HW1_CNN/imagenette2-160/noisy_imagenette.csv')
 # print(data_df.columns)
 
 train_df = data_df[data_df['is_valid'] == False]
@@ -57,14 +58,13 @@ val_transforms = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-# train_dataset = ImagenetteDataset(train_df['label'].values, root_dir='/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160', transform=train_transforms)
-# val_dataset = ImagenetteDataset(val_df['label'].values, root_dir='/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160', transform=val_transforms)
-# Updated Dataset Initialization
-# train_dataset = ImagenetteDataset(train_df['noisy_labels_0'].values, train_df['/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160'].values, transform=train_transforms)
-# val_dataset = ImagenetteDataset(val_df['noisy_labels_0'].values, val_df['/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160'].values, transform=val_transforms)
 # Ensure full paths for images by concatenating root directory with paths from 'path' column
-train_paths = [os.path.join('/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160', p) for p in train_df['path']]
-val_paths = [os.path.join('/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160', p) for p in val_df['path']]
+# Local version
+# train_paths = [os.path.join('/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160', p) for p in train_df['path']]
+# val_paths = [os.path.join('/Users/bruce/Desktop/Romania/DNN/DNN_CNN_HW1/imagenette2-160', p) for p in val_df['path']]
+
+train_paths = [os.path.join('/content/DNN_HW1_CNN/imagenette2-160', p) for p in train_df['path']] #colab
+val_paths = [os.path.join('/content/DNN_HW1_CNN/imagenette2-160', p) for p in val_df['path']] #colab
 
 train_dataset = ImagenetteDataset(train_df['noisy_labels_0'].values, train_paths, transform=train_transforms)
 val_dataset = ImagenetteDataset(val_df['noisy_labels_0'].values, val_paths, transform=val_transforms)
@@ -215,6 +215,7 @@ plt.plot(val_losses, label='Validation Loss')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
+plt.savefig('/content/DNN_HW1_CNN/results.png')
 
 plt.subplot(1, 2, 2)
 plt.plot(train_accuracies, label='Train Accuracy')
