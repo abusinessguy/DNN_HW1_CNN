@@ -15,12 +15,12 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, C
 import numpy as np
 
 # Set the model configuration name
-model_config_name = "Model with Batch Normalization"
+model_config_name = "Model with Augmentation"
 
 # Adjustable parameters
 batch_size = 64
 learning_rate = 0.001
-dropout_rate = 0.
+dropout_rate = 0.4
 num_epochs = 20
 
 train_losses, val_losses = [], []
@@ -79,8 +79,8 @@ val_df = data_df[data_df['is_valid'] == True]
 
 train_transforms = transforms.Compose([
     transforms.Resize((160, 160)),  # Enforce 160x160 for all images
-    #transforms.RandomHorizontalFlip(),
-    #transforms.ColorJitter(),
+    transforms.RandomHorizontalFlip(),
+    transforms.ColorJitter(),
     transforms.ToTensor(),
 ])
 val_transforms = transforms.Compose([
@@ -110,12 +110,12 @@ class SimpleCNN(nn.Module):
         
         # First convolutional layer with ReLU activation and max pooling
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)  # Batch normalization for first conv layer
+        #self.bn1 = nn.BatchNorm2d(32)  # Batch normalization for first conv layer
         self.relu1 = nn.ReLU()  # ReLU activation
         
         # Second convolutional layer with ReLU activation and max pooling
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.bn2 = nn.BatchNorm2d(64)  # Batch normalization for second conv layer
+        #self.bn2 = nn.BatchNorm2d(64)  # Batch normalization for second conv layer
         self.relu2 = nn.ReLU()  # ReLU activation
 
         # Pooling layer to reduce dimensions
@@ -129,13 +129,13 @@ class SimpleCNN(nn.Module):
     def forward(self, x):
         # Pass through first conv layer, apply ReLU, and then max pooling
         x = self.conv1(x)
-        x = self.bn1(x)  # Apply batch normalization
+        #x = self.bn1(x)  # Apply batch normalization
         x = self.relu1(x)  # Applying ReLU activation
         x = self.pool(x)   # Applying Max Pooling
         
         # Pass through second conv layer, apply ReLU, and then max pooling
         x = self.conv2(x)
-        x = self.bn2(x)  # Apply batch normalization
+        #x = self.bn2(x)  # Apply batch normalization
         x = self.relu2(x)  # Applying ReLU activation
         x = self.pool(x)   # Applying Max Pooling
 
