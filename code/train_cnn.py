@@ -15,7 +15,7 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, C
 import numpy as np
 
 # Set the model configuration name
-model_config_name = "Base Model"
+model_config_name = "Model with Batch Normalization"
 
 # Adjustable parameters
 batch_size = 64
@@ -27,7 +27,7 @@ train_losses, val_losses = [], []
 train_accuracies, val_accuracies = [], []
 
 # Define a CSV file to log results
-log_file = 'training_log.csv'
+log_file = f'training_log_{model_config_name.replace(" ", "_")}.csv'
 log_exists = os.path.isfile(log_file)
 
 # Define directories for checkpoints and ensure they exist
@@ -110,12 +110,12 @@ class SimpleCNN(nn.Module):
         
         # First convolutional layer with ReLU activation and max pooling
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=1, padding=1)
-        #self.bn1 = nn.BatchNorm2d(32)  # Batch normalization for first conv layer
+        self.bn1 = nn.BatchNorm2d(32)  # Batch normalization for first conv layer
         self.relu1 = nn.ReLU()  # ReLU activation
         
         # Second convolutional layer with ReLU activation and max pooling
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        #self.bn2 = nn.BatchNorm2d(64)  # Batch normalization for second conv layer
+        self.bn2 = nn.BatchNorm2d(64)  # Batch normalization for second conv layer
         self.relu2 = nn.ReLU()  # ReLU activation
 
         # Pooling layer to reduce dimensions
@@ -129,13 +129,13 @@ class SimpleCNN(nn.Module):
     def forward(self, x):
         # Pass through first conv layer, apply ReLU, and then max pooling
         x = self.conv1(x)
-        #x = self.bn1(x)  # Apply batch normalization
+        x = self.bn1(x)  # Apply batch normalization
         x = self.relu1(x)  # Applying ReLU activation
         x = self.pool(x)   # Applying Max Pooling
         
         # Pass through second conv layer, apply ReLU, and then max pooling
         x = self.conv2(x)
-        #x = self.bn2(x)  # Apply batch normalization
+        x = self.bn2(x)  # Apply batch normalization
         x = self.relu2(x)  # Applying ReLU activation
         x = self.pool(x)   # Applying Max Pooling
 
@@ -171,7 +171,7 @@ def plot_training_results(train_losses, val_losses, train_accuracies, val_accura
     plt.plot(val_losses, label='Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.title(f'{model_config_name} - Training and Validation Loss per Epoch')
+    plt.title(f'{model_config_name} - Loss')
     plt.legend()
 
     plt.subplot(1, 2, 2)
@@ -179,14 +179,14 @@ def plot_training_results(train_losses, val_losses, train_accuracies, val_accura
     plt.plot(val_accuracies, label='Validation Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy (%)')
-    plt.title(f'{model_config_name} - Training and Validation Accuracy per Epoch')
+    plt.title(f'{model_config_name} - Accuracy')
     plt.legend()
 
     plt.savefig(f'/content/DNN_HW1_CNN/{model_config_name}_training_results.png')
     plt.show()
 
 
-    # Confusion Matrix and Metrics with model setting label
+# Confusion Matrix and Metrics with model setting label
 def calculate_confusion_matrix_and_metrics(model, val_loader, device, model_config_name):
     model.eval()
     all_preds, all_labels = [], []
@@ -200,7 +200,7 @@ def calculate_confusion_matrix_and_metrics(model, val_loader, device, model_conf
             all_labels.extend(labels.cpu().numpy())
 
     cm = confusion_matrix(all_labels, all_preds)
-    precision, recall, f1_score, _ = precision_recall_fscore_support(all_labels, all_preds, average=None)
+    precision, recall, f1_score, _ = precision_recall_fscore_support(all_labels, all_preds, average=None, zero_division=1)
     
     # Display and save confusion matrix with label
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=sorted(set(all_labels)))
