@@ -11,11 +11,36 @@ import os
 import glob
 import torch.nn.functional as F
 import csv
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, ConfusionMatrixDisplay
+import numpy as np
+
+# Set the model configuration name
+model_config_name = "Base Model"
 
 # Adjustable parameters
 batch_size = 64
 learning_rate = 0.001
-dropout_rate = 0.4
+dropout_rate = 0.
+num_epochs = 20
+
+train_losses, val_losses = [], []
+train_accuracies, val_accuracies = [], []
+
+# Define a CSV file to log results
+log_file = 'training_log.csv'
+log_exists = os.path.isfile(log_file)
+
+# Define directories for checkpoints and ensure they exist
+checkpoint_dir = 'checkpoints'
+os.makedirs(checkpoint_dir, exist_ok=True)
+
+# Open the file in write mode to log headers only if the file doesn't exist
+if not log_exists:
+    with open(log_file, mode='w') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Epoch", "Train Loss", "Train Accuracy", "Val Loss", "Val Accuracy"])
+
+
 
 # Step 1: Dataset and DataLoader setup
 class ImagenetteDataset(Dataset):
@@ -54,8 +79,8 @@ val_df = data_df[data_df['is_valid'] == True]
 
 train_transforms = transforms.Compose([
     transforms.Resize((160, 160)),  # Enforce 160x160 for all images
-    transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(),
+    #transforms.RandomHorizontalFlip(),
+    #transforms.ColorJitter(),
     transforms.ToTensor(),
 ])
 val_transforms = transforms.Compose([
@@ -98,7 +123,7 @@ class SimpleCNN(nn.Module):
 
         # Fully connected layer and final output layer with Softmax
         self.fc1 = nn.Linear(102400, 128)  # Adjust input size based on pooling output dimensions
-        self.dropout = nn.Dropout(dropout_rate)  # Dropout layer with 50% probability
+        #self.dropout = nn.Dropout(dropout_rate)  # Dropout layer with 50% probability
         self.fc2 = nn.Linear(128, num_classes)  # Output layer for class predictions
 
     def forward(self, x):
@@ -120,7 +145,7 @@ class SimpleCNN(nn.Module):
         # Fully connected layers
         x = self.fc1(x)
         x = F.relu(x)  # Another ReLU activation in the fully connected layer
-        x = self.dropout(x)  # Apply dropout regularization
+        #x = self.dropout(x)  # Apply dropout regularization
 
         # Output layer with Softmax
         x = self.fc2(x)
@@ -134,27 +159,63 @@ print(f"Using device: {device}")
 model = SimpleCNN(num_classes=10).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+# Learning Rate Scheduler setup
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+
+# Plotting results
+def plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, model_config_name):
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(train_losses, label='Training Loss')
+    plt.plot(val_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title(f'{model_config_name} - Training and Validation Loss per Epoch')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(train_accuracies, label='Training Accuracy')
+    plt.plot(val_accuracies, label='Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy (%)')
+    plt.title(f'{model_config_name} - Training and Validation Accuracy per Epoch')
+    plt.legend()
+
+    plt.savefig(f'/content/DNN_HW1_CNN/{model_config_name}_training_results.png')
+    plt.show()
+
+
+    # Confusion Matrix and Metrics with model setting label
+def calculate_confusion_matrix_and_metrics(model, val_loader, device, model_config_name):
+    model.eval()
+    all_preds, all_labels = [], []
+
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            _, predicted = torch.max(outputs, 1)
+            all_preds.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    cm = confusion_matrix(all_labels, all_preds)
+    precision, recall, f1_score, _ = precision_recall_fscore_support(all_labels, all_preds, average=None)
+    
+    # Display and save confusion matrix with label
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=sorted(set(all_labels)))
+    disp.plot(cmap='Blues', values_format='d')
+    plt.title(f'{model_config_name} - Confusion Matrix')
+    plt.savefig(f'/content/DNN_HW1_CNN/{model_config_name}_confusion_matrix.png')
+    plt.show()
+    
+    # Output precision, recall, and F1-score for each class
+    for idx, label in enumerate(sorted(set(all_labels))):
+        print(f"Class {label} - {model_config_name}: Precision = {precision[idx]:.2f}, Recall = {recall[idx]:.2f}, F1-Score = {f1_score[idx]:.2f}")
+    
+    return cm, precision, recall, f1_score
 
 # Step 4: Training loop
-num_epochs = 20
-train_losses, val_losses = [], []
-train_accuracies, val_accuracies = [], []
-
-# Define a CSV file to log results
-log_file = 'training_log.csv'
-log_exists = os.path.isfile(log_file)
-
-# Define directories for checkpoints and ensure they exist
-checkpoint_dir = 'checkpoints'
-os.makedirs(checkpoint_dir, exist_ok=True)
-
-# Open the file in write mode to log headers only if the file doesn't exist
-if not log_exists:
-    with open(log_file, mode='w') as file:
-        writer = csv.writer(file)
-        writer.writerow(["Epoch", "Train Loss", "Train Accuracy", "Val Loss", "Val Accuracy"])
-
-
 for epoch in range(num_epochs):
     model.train()
     running_loss, correct, total = 0.0, 0, 0
@@ -191,10 +252,19 @@ for epoch in range(num_epochs):
 
     val_losses.append(val_loss / val_total)
     val_accuracies.append(100 * val_correct / val_total)
+
+    # Step the learning rate scheduler
+    scheduler.step()
     
     print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_losses[-1]:.4f}, Train Acc: {train_accuracies[-1]:.2f}%"
           f", Val Loss: {val_losses[-1]:.4f}, Val Acc: {val_accuracies[-1]:.2f}%")
-    
+
+    # End of each epoch - plot results, calculate confusion matrix, etc.
+    if epoch == num_epochs - 1:
+        # Plot training results and calculate metrics after final epoch
+        plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, model_config_name)
+        calculate_confusion_matrix_and_metrics(model, val_loader, device, model_config_name)
+
     # Log epoch metrics to CSV
     with open(log_file, mode='a') as file:
         writer = csv.writer(file)
@@ -221,21 +291,4 @@ torch.save(model.state_dict(), final_model_path)
 print(f"Final model saved at {final_model_path}")
 
 
-# Step 5: Plotting results
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
-plt.plot(train_losses, label='Train Loss')
-plt.plot(val_losses, label='Validation Loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.legend()
 
-plt.subplot(1, 2, 2)
-plt.plot(train_accuracies, label='Train Accuracy')
-plt.plot(val_accuracies, label='Validation Accuracy')
-plt.xlabel('Epoch')
-plt.ylabel('Accuracy (%)')
-plt.legend()
-
-plt.savefig('/content/DNN_HW1_CNN/results.png')
-plt.show()
