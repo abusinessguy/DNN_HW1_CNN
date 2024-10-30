@@ -103,23 +103,38 @@ class MyConvStub:
                             # Apply the filter (dot product)
                             output[b, g * (out_channels // self.groups) + oc, h, w] += torch.sum(input_patch * weight_group_slice[oc, :, :, :])
 
+                            # Add bias to the output at this position if bias is defined
+                            if self.bias is not None:
+                                output[b, g * (out_channels // self.groups) + oc, h, w] += self.bias[g * (out_channels // self.groups) + oc]
+
         return output
 
 
 class MyFilterStub:
-    def __init__(
-            self,
-            filter: torch.Tensor,
-            input_channels: int,
-    ):
+    def __init__(self, filter: torch.Tensor, input_channels: int):
         self.weight = filter
         self.input_channels = input_channels
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Simple implementation applying the filter channelwise
-        output = torch.zeros_like(x)
-        for i in range(self.input_channels):
-            output[:, i, :, :] = torch.nn.functional.conv2d(
-                x[:, i:i+1, :, :], self.weight.unsqueeze(0).unsqueeze(0), padding=1
-            )
+        batch_size, _, input_height, input_width = x.shape
+        kernel_height, kernel_width = self.weight.shape
+
+        # Calculate output dimensions
+        output_height = input_height - kernel_height + 1
+        output_width = input_width - kernel_width + 1
+
+        # Initialize output tensor
+        output = torch.zeros((batch_size, self.input_channels, output_height, output_width), dtype=x.dtype, device=x.device)
+
+        # Perform manual convolution
+        for b in range(batch_size):  # Loop over each image in the batch
+            for c in range(self.input_channels):  # Loop over each input channel
+                for i in range(output_height):
+                    for j in range(output_width):
+                        # Extract the region of interest (the "patch") from the input
+                        patch = x[b, c, i:i + kernel_height, j:j + kernel_width]
+                        
+                        # Element-wise multiply and sum to get the convolution result at this position
+                        output[b, c, i, j] = torch.sum(patch * self.weight)
+        
         return output
